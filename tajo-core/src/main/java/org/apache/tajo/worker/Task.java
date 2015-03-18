@@ -151,7 +151,7 @@ public class Task {
         descs.put(scan.getCanonicalName(), scan.getTableDesc());
       }
     }
-
+    LOG.info("<<<initPlan");
     interQuery = request.getProto().getInterQuery();
     if (interQuery) {
       context.setInterQuery();

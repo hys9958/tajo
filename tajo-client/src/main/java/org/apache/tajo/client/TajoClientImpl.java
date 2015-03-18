@@ -165,6 +165,14 @@ public class TajoClientImpl extends SessionConnection implements TajoClient, Que
   public QueryHistoryProto getQueryHistory(final QueryId queryId) throws ServiceException {
     return queryClient.getQueryHistory(queryId);
   }
+  
+  public void setMaxRows(int maxRows) {
+	  queryClient.setMaxRows(maxRows);
+  }
+
+  public int getMaxRows() {
+	  return queryClient.getMaxRows();
+  }
 
   /*------------------------------------------------------------------------*/
   // CatalogClient wrappers

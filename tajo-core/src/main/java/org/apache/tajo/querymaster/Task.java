@@ -340,6 +340,7 @@ public class Task implements EventHandler<TaskEvent> {
       fragmentProtos = new HashSet<FragmentProto>();
       fragMap.put(fragment.getTableName(), fragmentProtos);
     }
+    LOG.info("<<<addFragment");
     fragmentProtos.add(fragment.getProto());
     if (useDataLocation) {
       addDataLocation(fragment);

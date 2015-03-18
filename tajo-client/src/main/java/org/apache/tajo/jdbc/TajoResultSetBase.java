@@ -46,6 +46,8 @@ public abstract class TajoResultSetBase implements ResultSet {
   protected boolean wasNull;
   protected Schema schema;
   protected Tuple cur;
+  
+  private int maxRows;
 
   public TajoResultSetBase(@Nullable Map<String, String> clientSideSessionVars) {
     this.clientSideSessionVars = clientSideSessionVars;
@@ -67,10 +69,15 @@ public abstract class TajoResultSetBase implements ResultSet {
     curRow = 0;
     totalRow = 0;
     wasNull = false;
+    maxRows = 0;
   }
 
   private void handleNull(Datum d) {
     wasNull = (d instanceof NullDatum);
+  }
+  
+  public void setMaxRows(int maxRows){
+	  this.maxRows = maxRows;
   }
 
   public Tuple getCurrentTuple() {
@@ -456,8 +463,7 @@ public abstract class TajoResultSetBase implements ResultSet {
 
   @Override
   public void afterLast() throws SQLException {
-    while (this.next())
-      ;
+    while (this.next());
   }
 
   @Override

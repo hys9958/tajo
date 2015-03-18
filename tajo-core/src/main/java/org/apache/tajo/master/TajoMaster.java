@@ -562,7 +562,7 @@ public class TajoMaster extends CompositeService {
   }
 
   public static void main(String[] args) throws Exception {
-    StringUtils.startupShutdownMessage(TajoMaster.class, args, LOG);
+    //StringUtils.startupShutdownMessage(TajoMaster.class, args, LOG);
 
     try {
       TajoMaster master = new TajoMaster();

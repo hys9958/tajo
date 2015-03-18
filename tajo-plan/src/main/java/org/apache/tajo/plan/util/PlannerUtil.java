@@ -836,7 +836,7 @@ public class PlannerUtil {
   }
 
   public static boolean isFileStorageType(String storageType) {
-    if (storageType.equalsIgnoreCase("hbase")) {
+    if (storageType.equalsIgnoreCase("hbase") || storageType.equalsIgnoreCase("kafka")) {
       return false;
     } else {
       return true;
@@ -844,7 +844,7 @@ public class PlannerUtil {
   }
 
   public static boolean isFileStorageType(StoreType storageType) {
-    if (storageType== StoreType.HBASE) {
+    if (storageType== StoreType.HBASE || storageType== StoreType.KAFKA) {
       return false;
     } else {
       return true;

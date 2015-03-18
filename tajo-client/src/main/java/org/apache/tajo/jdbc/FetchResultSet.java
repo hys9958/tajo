@@ -32,10 +32,12 @@ public class FetchResultSet extends TajoResultSetBase {
   private int fetchRowNum;
   private TajoMemoryResultSet currentResultSet;
   private boolean finished = false;
+  private int maxRows;
 
   public FetchResultSet(QueryClient tajoClient, Schema schema, QueryId queryId, int fetchRowNum) {
     super(tajoClient.getClientSideSessionVars());
     this.tajoClient = tajoClient;
+    this.maxRows = tajoClient.getMaxRows();
     this.queryId = queryId;
     this.fetchRowNum = fetchRowNum;
     this.totalRow = Integer.MAX_VALUE;
@@ -48,7 +50,7 @@ public class FetchResultSet extends TajoResultSetBase {
 
   @Override
   protected Tuple nextTuple() throws IOException {
-    if (finished) {
+    if (finished || (maxRows > 0 && curRow >= maxRows)) {
       return null;
     }
 

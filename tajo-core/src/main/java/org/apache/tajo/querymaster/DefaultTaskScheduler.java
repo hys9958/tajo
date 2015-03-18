@@ -852,6 +852,7 @@ public class DefaultTaskScheduler extends AbstractTaskScheduler {
           assignedRequest.add(attemptId);
 
           scheduledObjectNum--;
+          LOG.info("<<<assignToLea");
           taskRequest.getCallback().run(taskAssign.getProto());
         } else {
           throw new RuntimeException("Illegal State!!!!!!!!!!!!!!!!!!!!!");
@@ -914,6 +915,7 @@ public class DefaultTaskScheduler extends AbstractTaskScheduler {
 
           WorkerConnectionInfo connectionInfo = context.getMasterContext().getResourceAllocator().
               getWorkerConnectionInfo(taskRequest.getWorkerId());
+          LOG.info("<<<assignToNon");
           context.getMasterContext().getEventHandler().handle(new TaskAttemptAssignedEvent(attemptId,
               taskRequest.getContainerId(), connectionInfo));
           taskRequest.getCallback().run(taskAssign.getProto());

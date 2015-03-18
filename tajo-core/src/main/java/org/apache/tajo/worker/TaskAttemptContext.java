@@ -257,6 +257,7 @@ public class TaskAttemptContext {
     fragmentMap.remove(tableId);
     for(Fragment t : fragments) {
       if (fragmentMap.containsKey(t.getTableName())) {
+    	  LOG.info("<<<update");
         fragmentMap.get(t.getTableName()).add(t.getProto());
       } else {
         List<FragmentProto> frags = new ArrayList<FragmentProto>();

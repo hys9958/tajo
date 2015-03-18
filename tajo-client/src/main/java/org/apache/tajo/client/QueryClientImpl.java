@@ -18,42 +18,60 @@
 
 package org.apache.tajo.client;
 
-import com.google.protobuf.ServiceException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.apache.tajo.*;
-import org.apache.tajo.auth.UserRoleInfo;
-import org.apache.tajo.catalog.CatalogUtil;
-import org.apache.tajo.catalog.Schema;
-import org.apache.tajo.catalog.TableDesc;
-import org.apache.tajo.ipc.ClientProtos;
-import org.apache.tajo.ipc.QueryMasterClientProtocol;
-import org.apache.tajo.ipc.TajoMasterClientProtocol;
-import org.apache.tajo.jdbc.FetchResultSet;
-import org.apache.tajo.jdbc.TajoMemoryResultSet;
-import org.apache.tajo.rpc.NettyClientBase;
-import org.apache.tajo.rpc.ServerCallable;
-import org.apache.tajo.util.ProtoUtil;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.sql.ResultSet;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.tajo.ipc.ClientProtos.*;
-import static org.apache.tajo.ipc.QueryMasterClientProtocol.QueryMasterClientProtocolService;
-import static org.apache.tajo.ipc.TajoMasterClientProtocol.TajoMasterClientProtocolService;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.tajo.QueryId;
+import org.apache.tajo.QueryIdFactory;
+import org.apache.tajo.SessionVars;
+import org.apache.tajo.TajoIdProtos;
+import org.apache.tajo.TajoProtos;
+import org.apache.tajo.auth.UserRoleInfo;
+import org.apache.tajo.catalog.CatalogUtil;
+import org.apache.tajo.catalog.Schema;
+import org.apache.tajo.catalog.TableDesc;
+import org.apache.tajo.ipc.ClientProtos;
+import org.apache.tajo.ipc.ClientProtos.GetQueryHistoryResponse;
+import org.apache.tajo.ipc.ClientProtos.GetQueryInfoResponse;
+import org.apache.tajo.ipc.ClientProtos.GetQueryResultDataRequest;
+import org.apache.tajo.ipc.ClientProtos.GetQueryResultDataResponse;
+import org.apache.tajo.ipc.ClientProtos.GetQueryResultRequest;
+import org.apache.tajo.ipc.ClientProtos.GetQueryResultResponse;
+import org.apache.tajo.ipc.ClientProtos.GetQueryStatusResponse;
+import org.apache.tajo.ipc.ClientProtos.QueryHistoryProto;
+import org.apache.tajo.ipc.ClientProtos.QueryIdRequest;
+import org.apache.tajo.ipc.ClientProtos.QueryInfoProto;
+import org.apache.tajo.ipc.ClientProtos.QueryRequest;
+import org.apache.tajo.ipc.ClientProtos.ResultCode;
+import org.apache.tajo.ipc.ClientProtos.SubmitQueryResponse;
+import org.apache.tajo.ipc.QueryMasterClientProtocol;
+import org.apache.tajo.ipc.QueryMasterClientProtocol.QueryMasterClientProtocolService;
+import org.apache.tajo.ipc.TajoMasterClientProtocol;
+import org.apache.tajo.ipc.TajoMasterClientProtocol.TajoMasterClientProtocolService;
+import org.apache.tajo.jdbc.FetchResultSet;
+import org.apache.tajo.jdbc.TajoMemoryResultSet;
+import org.apache.tajo.rpc.NettyClientBase;
+import org.apache.tajo.rpc.ServerCallable;
+import org.apache.tajo.util.ProtoUtil;
+
+import com.google.protobuf.ServiceException;
 
 public class QueryClientImpl implements QueryClient {
   private static final Log LOG = LogFactory.getLog(QueryClientImpl.class);
   private final SessionConnection connection;
   private final int defaultFetchRows;
+  private int maxRows;
 
   public QueryClientImpl(SessionConnection connection) {
     this.connection = connection;
     this.defaultFetchRows = this.connection.getProperties().getInt(SessionVars.FETCH_ROWNUM.getConfVars().keyname(),
         SessionVars.FETCH_ROWNUM.getConfVars().defaultIntVal);
+    this.maxRows = 0;
   }
 
   @Override
@@ -575,7 +593,17 @@ public class QueryClientImpl implements QueryClient {
     }
     return status;
   }
-
+	
+  @Override
+  public void setMaxRows(int maxRows) {
+		this.maxRows = maxRows;
+  }
+  
+  @Override
+  public int getMaxRows() {
+  	return this.maxRows;
+  }
+  
   public QueryInfoProto getQueryInfo(final QueryId queryId) throws ServiceException {
     return new ServerCallable<QueryInfoProto>(connection.connPool, connection.getTajoMasterAddr(),
         TajoMasterClientProtocol.class, false, true) {
