@@ -21,11 +21,11 @@ package org.apache.tajo.storage.kafka;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.commons.collections.IteratorUtils;
+import java.util.Set;
 
 import kafka.api.FetchRequest;
 import kafka.api.FetchRequestBuilder;
@@ -39,6 +39,8 @@ import kafka.javaapi.TopicMetadataRequest;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.message.MessageAndOffset;
 
+import org.apache.commons.collections.IteratorUtils;
+
 
 public class KafKaSimpleConsumer {
     static final int CONSUMER_TIMEOUT = 30000;
@@ -51,6 +53,7 @@ public class KafKaSimpleConsumer {
     private String topic;
     private int partition;
     private String clientName;
+    private String leadBroker;
 	
 	public KafKaSimpleConsumer(List<String> seedBrokers, int port, String topic, int partition) {
 		replicaBrokers = new ArrayList<String>();
@@ -66,7 +69,7 @@ public class KafKaSimpleConsumer {
             System.out.println("Can't find Leader for Topic and Partition. Exiting");
             return;
         }
-        String leadBroker = metadata.leader().host();
+        leadBroker = metadata.leader().host();
         clientName = clientId + topic + "_" + partition;
 
         consumer = new SimpleConsumer(leadBroker, port, CONSUMER_TIMEOUT, CONSUMER_BUFFER_SIZE, clientName);
@@ -180,6 +183,36 @@ public class KafKaSimpleConsumer {
         }
         return returnMetaData;
     }
+    
+    static public Set<Integer> getPartitions(List<String> seedBrokers, int port, String topic) {
+    	Set<Integer> partitions = new HashSet<Integer>();
+        for (String seed : seedBrokers) {
+            SimpleConsumer consumer = null;
+            try {
+                consumer = new SimpleConsumer(seed, port, CONSUMER_TIMEOUT, CONSUMER_BUFFER_SIZE, clientId+"partitionLookup");
+                List<String> topics = new ArrayList<String>();
+                topics.add(topic);
+                TopicMetadataRequest req = new TopicMetadataRequest(topics);
+                kafka.javaapi.TopicMetadataResponse resp = consumer.send(req);
+
+                //call to topicsMetadata() asks the Broker you are connected to for all the details about the topic we are interested in
+                List<TopicMetadata> metaData = resp.topicsMetadata();
+                //loop on partitionsMetadata iterates through all the partitions until we find the one we want.
+                for (TopicMetadata item : metaData) {
+                    for (PartitionMetadata part : item.partitionsMetadata()) {
+                    	partitions.add(part.partitionId());
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("Error communicating with Broker [" + seed + "] to find Leader for [" + topic
+                        + "] Reason: " + e);
+            } finally {
+                if (consumer != null) consumer.close();
+            }
+        }
+        return partitions;
+    }
+    
     public static void main(String args[]) {
     	KafKaSimpleConsumer simpleConsumer = new KafKaSimpleConsumer(new ArrayList<String>(Arrays.asList("localhost".split(","))),
     			9092, "kafka_test", 0);

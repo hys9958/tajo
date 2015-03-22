@@ -112,7 +112,7 @@ public class KafkaScanner implements Scanner {
 	@Override
 	public Schema getSchema() {
 		LOG.info(">>>>>>getSchema");
-		return null;
+		return this.schema;
 	}
 
 	@Override
@@ -136,6 +136,7 @@ public class KafkaScanner implements Scanner {
 
 	@Override
 	public Tuple next() throws IOException {
+		LOG.info(">>>>>>next");
 	    if (finished.get()) {
 	        return null;
 	      }
@@ -176,14 +177,15 @@ public class KafkaScanner implements Scanner {
 
 	@Override
 	public void reset() throws IOException {
+		LOG.info(">>>>>>reset");
 		progress = 0.0f;
 		messageIndex = 0;
 		finished.set(false);
-		LOG.info(">>>>>>reset");	
 	}
 
 	@Override
 	public void close() throws IOException {
+		LOG.info(">>>>>>close");
 	    progress = 1.0f;
 		finished.set(true);
 //		messages.clear();
@@ -191,7 +193,6 @@ public class KafkaScanner implements Scanner {
         if (tableStats != null) {
        	 tableStats.setNumRows(messageIndex);
        }
-		LOG.info(">>>>>>close");
 	}
 
 	@Override
@@ -235,6 +236,7 @@ public class KafkaScanner implements Scanner {
 
 	@Override
 	public TableStats getInputStats() {
+		LOG.info(">>>>>>getInputStats");
         if (tableStats != null) {
         	 tableStats.setNumRows(messageIndex);
         }

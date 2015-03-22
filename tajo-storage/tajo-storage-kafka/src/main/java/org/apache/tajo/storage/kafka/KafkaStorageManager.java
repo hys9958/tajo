@@ -21,7 +21,9 @@ package org.apache.tajo.storage.kafka;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -48,7 +50,6 @@ public class KafkaStorageManager extends StorageManager {
 	
 	public KafkaStorageManager(StoreType storeType) {
 		super(storeType);
-		LOG.info(">>>>>KafkaStorageManager+storeType: "+storeType.name());
 	}
 	
 	@Override
@@ -68,7 +69,7 @@ public class KafkaStorageManager extends StorageManager {
 	    TableStats stats = new TableStats();
 	    stats.setNumRows(TajoConstants.UNKNOWN_ROW_NUMBER);
 	    tableDesc.setStats(stats);
-		LOG.info(">>>>>createTable+tableDesc: "+tableDesc.toString());
+		LOG.info(">>>>>createTable+tableDesc");
 	}
 
 	@Override
@@ -79,71 +80,28 @@ public class KafkaStorageManager extends StorageManager {
 	@Override
 	public List<Fragment> getSplits(String fragmentId, TableDesc tableDesc,
 			ScanNode scanNode) throws IOException {
-		
-		String topic = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_TOPIC);
-		String broker = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_BROKER);
-		int brokerPort = Integer.parseInt(tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_BROKER_PORT));
-		String partition = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_TOPIC_PARTITION);
-		ArrayList<String> brokerList = new ArrayList<String>(Arrays.asList(broker.split(",")));
-		
-		List<Fragment> fragments = new ArrayList<Fragment>();	
-		for(String topicPartition : partition.split(",")){
-			int partitionId = Integer.parseInt(topicPartition);
-			KafKaSimpleConsumer simpleConsumer = new KafKaSimpleConsumer(brokerList,
-					brokerPort, topic, partitionId);
-			long lastOffset = simpleConsumer.getReadOffset(kafka.api.OffsetRequest.LatestTime());
-			long startOffset = simpleConsumer.getReadOffset(kafka.api.OffsetRequest.EarliestTime());
-			simpleConsumer.close();
-			long messageSize = lastOffset - startOffset;
-			if(0 == lastOffset || 0 == messageSize) continue;
-			if(messageSize <= KafkaStorageConstants.FRAGMENT_SIZE){
-			    KafkaFragment fragment = new KafkaFragment(tableDesc.getName(), topic, partitionId, broker, brokerPort, startOffset, lastOffset);
-			    fragment.setLength(TajoConstants.UNKNOWN_LENGTH);
-			    fragments.add(fragment);	
-			}else {
-				long nextFragmentStartOffset = startOffset;
-				while(nextFragmentStartOffset < lastOffset){
-					long nextFragmentlastOffset = nextFragmentStartOffset + KafkaStorageConstants.FRAGMENT_SIZE;
-				    KafkaFragment fragment = new KafkaFragment(tableDesc.getName(), topic, partitionId, broker, brokerPort, nextFragmentStartOffset, nextFragmentlastOffset);
-				    fragment.setLength(TajoConstants.UNKNOWN_LENGTH);
-				    fragments.add(fragment);
-				    nextFragmentStartOffset = nextFragmentlastOffset;
-				}
-			}
-		}
-		
-	    return fragments;
+		LOG.info(">>>>>getSplits");
+		return getFragmentList(tableDesc);
 	}
 
 	@Override
 	public List<Fragment> getNonForwardSplit(TableDesc tableDesc,
 			int currentPage, int numFragments) throws IOException {
-		String topic = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_TOPIC);
-		String broker = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_BROKER);
-		int brokerPort = Integer.parseInt(tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_BROKER_PORT));
-		String partition = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_TOPIC_PARTITION);
-		ArrayList<String> brokerList = new ArrayList<String>(Arrays.asList(broker.split(",")));
-		
-        List<Fragment> fragments = new ArrayList<Fragment>();  
-        for(String topicPartition : partition.split(",")){
-                int partitionId = Integer.parseInt(topicPartition);
-                KafKaSimpleConsumer simpleConsumer = new KafKaSimpleConsumer(brokerList,
-                                brokerPort, topic, partitionId);
-                long lastOffset = simpleConsumer.getReadOffset(kafka.api.OffsetRequest.LatestTime());
-                simpleConsumer.close();
-                if(0 == lastOffset) continue;
-            KafkaFragment fragment = new KafkaFragment(tableDesc.getName(), topic, partitionId, broker, brokerPort, 0L, lastOffset);
-            fragment.setLength(TajoConstants.UNKNOWN_LENGTH);
-            fragments.add(fragment);
-        }
-		
-	    return fragments;
+		LOG.info(">>>>>getNonForwardSplit");
+		if(currentPage > 0){
+			return new ArrayList<Fragment>(1);
+		}else{
+			return getFragmentList(tableDesc);
+		}
 	}
 
 	@Override
 	public StorageProperty getStorageProperty() {
 		LOG.info(">>>>>getStorageProperty");
-		return null;
+	    StorageProperty storageProperty = new StorageProperty();
+	    storageProperty.setSortedInsert(false);
+	    storageProperty.setSupportsInsertInto(false);
+	    return storageProperty;
 	}
 
 	@Override
@@ -162,5 +120,46 @@ public class KafkaStorageManager extends StorageManager {
 	@Override
 	public void rollbackOutputCommit(LogicalNode node) throws IOException {
 		LOG.info(">>>>>rollbackOutputCommit");
+	}
+	
+	private List<Fragment> getFragmentList(TableDesc tableDesc){
+		String topic = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_TOPIC);
+		String broker = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_BROKER);
+		int brokerPort = Integer.parseInt(tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_BROKER_PORT));
+		String partitions = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_TOPIC_PARTITION,"ALL_PARTITION");
+		ArrayList<String> brokerList = new ArrayList<String>(Arrays.asList(broker.split(",")));
+		Set<Integer> partitionSet = new HashSet<Integer>();
+		if(partitions.equals("ALL_PARTITION")){
+			partitionSet = KafKaSimpleConsumer.getPartitions(brokerList, brokerPort, topic);
+		} else{
+	        for(String partitionId : partitions.split(",")){
+	        	partitionSet.add(Integer.parseInt(partitionId));
+	        }
+		}
+        List<Fragment> fragments = new ArrayList<Fragment>();  
+        for(Integer partitionId : partitionSet){
+                KafKaSimpleConsumer simpleConsumer = new KafKaSimpleConsumer(brokerList,
+                                brokerPort, topic, partitionId);
+                long lastOffset = simpleConsumer.getReadOffset(kafka.api.OffsetRequest.LatestTime());
+                long startOffset = simpleConsumer.getReadOffset(kafka.api.OffsetRequest.EarliestTime());
+                simpleConsumer.close();
+                long messageSize = lastOffset - startOffset;
+                if(0 == lastOffset || 0 == messageSize) continue;
+                if(messageSize <= KafkaStorageConstants.FRAGMENT_SIZE){
+    			    KafkaFragment fragment = new KafkaFragment(tableDesc.getName(), topic, partitionId, broker, brokerPort, startOffset, lastOffset);
+    			    fragment.setLength(TajoConstants.UNKNOWN_LENGTH);
+    			    fragments.add(fragment);
+                }else{
+    				long nextFragmentStartOffset = startOffset;
+    				while(nextFragmentStartOffset < lastOffset){
+    					long nextFragmentlastOffset = nextFragmentStartOffset + KafkaStorageConstants.FRAGMENT_SIZE;
+    				    KafkaFragment fragment = new KafkaFragment(tableDesc.getName(), topic, partitionId, broker, brokerPort, nextFragmentStartOffset, nextFragmentlastOffset);
+    				    fragment.setLength(TajoConstants.UNKNOWN_LENGTH);
+    				    fragments.add(fragment);
+    				    nextFragmentStartOffset = nextFragmentlastOffset;
+    				}
+                }
+        }
+        return fragments;
 	}
 }

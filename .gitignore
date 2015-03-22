@@ -2,6 +2,7 @@
 .settings
 .classpath
 .metadata
+.DS_Store
 target
 derby.log
 atlassian-ide-plugin.xml

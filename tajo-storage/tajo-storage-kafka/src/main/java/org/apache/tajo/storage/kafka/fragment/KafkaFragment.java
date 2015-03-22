@@ -164,6 +164,7 @@ public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 
 	@Override
 	public String[] getHosts() {
+		LOG.info(">>>>>>getHosts");
 	      return new String[0];
 	}
 
