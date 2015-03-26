@@ -650,7 +650,6 @@ public class HBaseStorageManager extends StorageManager {
         conn = HConnectionManager.createConnection(hbaseConf);
         connMap.put(key, conn);
       }
-
       return conn;
     }
   }

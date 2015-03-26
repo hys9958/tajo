@@ -43,8 +43,6 @@ public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 	@Expose
 	private String brokers;
 	@Expose
-	private int brokerPort;
-	@Expose
 	private long startOffset = -1;
 	@Expose
 	private long lastOffset;
@@ -52,12 +50,11 @@ public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 	private long length = -1;
 
 	public KafkaFragment(String tableName, String topicName, int partitionId,
-			String brokers, int brokerPort, long startOffset, long lastOffset) {
+			String brokers, long startOffset, long lastOffset) {
 		this.tableName = tableName;
 		this.topicName = topicName;
 		this.partitionId = partitionId;
 		this.brokers = brokers;
-		this.brokerPort = brokerPort;
 		this.startOffset = startOffset;
 		this.lastOffset = lastOffset;
 	}
@@ -68,10 +65,6 @@ public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 
 	public String getBrokers() {
 		return this.brokers;
-	}
-
-	public int getBrokerPort() {
-		return this.brokerPort;
 	}
 
 	public long getStartOffset() {
@@ -101,7 +94,6 @@ public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 		this.topicName = proto.getTopicName();
 		this.partitionId = proto.getPartitionId();
 		this.brokers = proto.getBrokers();
-		this.brokerPort = proto.getBrokerPort();
 		this.startOffset = proto.getStartOffset();
 		this.lastOffset = proto.getLastOffset();
 		this.length = proto.getLength();
@@ -138,7 +130,6 @@ public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 		builder.setTopicName(topicName);
 		builder.setPartitionId(partitionId);
 		builder.setBrokers(brokers);
-		builder.setBrokerPort(brokerPort);
 		builder.setStartOffset(startOffset);
 		builder.setLastOffset(lastOffset);
 		builder.setLength(length);

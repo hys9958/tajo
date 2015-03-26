@@ -35,9 +35,12 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.tajo.catalog.Column;
 import org.apache.tajo.catalog.Schema;
 import org.apache.tajo.catalog.TableMeta;
+import org.apache.tajo.catalog.proto.CatalogProtos.StoreType;
 import org.apache.tajo.catalog.statistics.TableStats;
+import org.apache.tajo.conf.TajoConf;
 import org.apache.tajo.storage.EmptyTuple;
 import org.apache.tajo.storage.Scanner;
+import org.apache.tajo.storage.StorageManager;
 import org.apache.tajo.storage.Tuple;
 import org.apache.tajo.storage.VTuple;
 import org.apache.tajo.storage.fragment.Fragment;
@@ -48,7 +51,7 @@ import org.apache.tajo.storage.text.TextLineParsingError;
 
 public class KafkaScanner implements Scanner {
 	private static final Log LOG = LogFactory.getLog(KafkaScanner.class);
-//	private TajoConf conf;
+	private TajoConf conf;
 	private Schema schema;
 	private TableMeta meta;
 	private TableStats tableStats;
@@ -62,9 +65,8 @@ public class KafkaScanner implements Scanner {
 	private float progress = 0.0f;
 	protected boolean inited = false;
 	
-	
 	public KafkaScanner (Configuration conf, Schema schema, TableMeta meta, Fragment fragment) throws IOException {
-//		this.conf = (TajoConf)conf;
+		this.conf = (TajoConf)conf;
 	    this.schema = schema;
 	    this.meta = meta;
 	    this.fragment = (KafkaFragment)fragment;
@@ -75,37 +77,33 @@ public class KafkaScanner implements Scanner {
 	/**
 	 * Read message from kafka.
 	 * @param messageSize
+	 * @throws IOException 
 	 */
-	private void readMessage() {
+	private void readMessage() throws IOException {
 		long startOffset = fragment.getStartOffset();
 		long lastOffset = fragment.getLastOffset();
 		long currentOffset = startOffset;
-		KafKaSimpleConsumer simpleConsumer = new KafKaSimpleConsumer(new ArrayList<String>(Arrays.asList(fragment.getBrokers().split(","))),
-				fragment.getBrokerPort(), fragment.getTopicName(), fragment.getPartitionId());
-		try{
-			while(currentOffset < lastOffset){
-				List<MessageAndOffset> messages = simpleConsumer.fetch(currentOffset);
-				
-				if(null == messages || messages.size() == 0) {
-					break;
-				}
-				
-				if(lastOffset <= messages.get(messages.size()-1).offset()) {
-					for(MessageAndOffset message : messages){
-						if(message.offset() < lastOffset){
-							this.messages.add(message);
-						}else{
-							currentOffset = message.offset();
-						}
-					}
-				}else{
-					this.messages.addAll(messages);
-					currentOffset = messages.get(messages.size()-1).offset()+1;
-				}
+		SimpleConsumerManager simpleConsumerManager = ((KafkaStorageManager)StorageManager.getStorageManager(conf, StoreType.KAFKA))
+	              .getConnection(fragment.getBrokers(), fragment.getTopicName(), fragment.getPartitionId());
+		while(currentOffset < lastOffset){
+			List<MessageAndOffset> messages = simpleConsumerManager.fetch(currentOffset);
+			
+			if(null == messages || messages.size() == 0) {
+				break;
 			}
 			
-		} finally{
-			simpleConsumer.close();
+			if(lastOffset <= messages.get(messages.size()-1).offset()) {
+				for(MessageAndOffset message : messages){
+					if(message.offset() < lastOffset){
+						this.messages.add(message);
+					}else{
+						currentOffset = message.offset();
+					}
+				}
+			}else{
+				this.messages.addAll(messages);
+				currentOffset = messages.get(messages.size()-1).offset()+1;
+			}
 		}
 	}
 	
