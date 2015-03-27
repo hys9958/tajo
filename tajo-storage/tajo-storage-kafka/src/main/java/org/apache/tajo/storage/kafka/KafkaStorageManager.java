@@ -87,14 +87,12 @@ public class KafkaStorageManager extends StorageManager {
 	@Override
 	public List<Fragment> getSplits(String fragmentId, TableDesc tableDesc,
 			ScanNode scanNode) throws IOException {
-		LOG.info(">>>>>getSplits");
 		return getFragmentList(tableDesc);
 	}
 
 	@Override
 	public List<Fragment> getNonForwardSplit(TableDesc tableDesc,
 			int currentPage, int numFragments) throws IOException {
-		LOG.info(">>>>>getNonForwardSplit");
 		if(currentPage > 0){
 			return new ArrayList<Fragment>(1);
 		}else{
@@ -104,7 +102,6 @@ public class KafkaStorageManager extends StorageManager {
 
 	@Override
 	public StorageProperty getStorageProperty() {
-		LOG.info(">>>>>getStorageProperty");
 	    StorageProperty storageProperty = new StorageProperty();
 	    storageProperty.setSortedInsert(false);
 	    storageProperty.setSupportsInsertInto(false);
@@ -115,21 +112,18 @@ public class KafkaStorageManager extends StorageManager {
 	public TupleRange[] getInsertSortRanges(OverridableConf queryContext,
 			TableDesc tableDesc, Schema inputSchema, SortSpec[] sortSpecs,
 			TupleRange dataRange) throws IOException {
-		LOG.info(">>>>>getInsertSortRanges");
 		return null;
 	}
 
 	@Override
 	public void beforeInsertOrCATS(LogicalNode node) throws IOException {
-		LOG.info(">>>>>beforeInsertOrCATS");
 	}
 
 	@Override
 	public void rollbackOutputCommit(LogicalNode node) throws IOException {
-		LOG.info(">>>>>rollbackOutputCommit");
 	}
 	
-	private List<Fragment> getFragmentList(TableDesc tableDesc){
+	private List<Fragment> getFragmentList(TableDesc tableDesc) throws IOException{
 		String topic = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_TOPIC);
 		String brokers = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_BROKER);
 		String partitions = tableDesc.getMeta().getOption(KafkaStorageConstants.KAFKA_TOPIC_PARTITION,"ALL_PARTITION");
@@ -166,7 +160,7 @@ public class KafkaStorageManager extends StorageManager {
         return fragments;
 	}
 	
-	public SimpleConsumerManager getConnection(String seedBrokers, String topic, int partition) {
+	public SimpleConsumerManager getConnection(String seedBrokers, String topic, int partition) throws IOException {
 		String conKey = topic + "_" + partition;
 	    synchronized(connMap) {
 	    	SimpleConsumerManager conn = connMap.get(conKey);
@@ -177,7 +171,4 @@ public class KafkaStorageManager extends StorageManager {
 	      return conn;
 	    }
 	  }
-	  
-	public static void main(String[] args) {
-	}
 }

@@ -18,8 +18,6 @@
 
 package org.apache.tajo.storage.kafka.fragment;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.tajo.catalog.CatalogUtil;
 import org.apache.tajo.catalog.proto.CatalogProtos.FragmentProto;
 import org.apache.tajo.catalog.proto.CatalogProtos.StoreType;
@@ -33,7 +31,6 @@ import com.google.protobuf.InvalidProtocolBufferException;
 
 public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 		Cloneable {
-	private static final Log LOG = LogFactory.getLog(KafkaFragment.class);
 	@Expose
 	private String tableName;
 	@Expose
@@ -101,7 +98,6 @@ public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 
 	@Override
 	public int compareTo(KafkaFragment o) {
-		LOG.info(">>>>>>compareTo");
 		if (this.topicName.equals(o.topicName)
 				&& this.partitionId == o.partitionId) {
 			long diff = this.startOffset - o.startOffset;
@@ -119,13 +115,11 @@ public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 
 	@Override
 	public String getTableName() {
-		LOG.info(">>>>>>getTableName");
 		return tableName;
 	}
 
 	@Override
 	public FragmentProto getProto() {
-		LOG.info(">>>>>>getProto");
 		KafkaFragmentProto.Builder builder = KafkaFragmentProto.newBuilder();
 		builder.setTopicName(topicName);
 		builder.setPartitionId(partitionId);
@@ -143,25 +137,21 @@ public class KafkaFragment implements Fragment, Comparable<KafkaFragment>,
 
 	@Override
 	public long getLength() {
-		LOG.info(">>>>>>getLength");
 		return this.length;
 	}
 
 	@Override
 	public String getKey() {
-		LOG.info(">>>>>>getKey");
 		return this.topicName + "_" + this.partitionId + "_" + this.startOffset;
 	}
 
 	@Override
 	public String[] getHosts() {
-		LOG.info(">>>>>>getHosts");
 	      return new String[0];
 	}
 
 	@Override
 	public boolean isEmpty() {
-		LOG.info(">>>>>>isEmpty");
 		return startOffset == -1;
 	}
 

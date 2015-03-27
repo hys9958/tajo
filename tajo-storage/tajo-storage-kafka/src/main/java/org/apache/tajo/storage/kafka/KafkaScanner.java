@@ -29,8 +29,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import kafka.message.MessageAndOffset;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.tajo.catalog.Column;
 import org.apache.tajo.catalog.Schema;
@@ -50,7 +48,6 @@ import org.apache.tajo.storage.text.TextLineDeserializer;
 import org.apache.tajo.storage.text.TextLineParsingError;
 
 public class KafkaScanner implements Scanner {
-	private static final Log LOG = LogFactory.getLog(KafkaScanner.class);
 	private TajoConf conf;
 	private Schema schema;
 	private TableMeta meta;
@@ -88,7 +85,10 @@ public class KafkaScanner implements Scanner {
 		while(currentOffset < lastOffset){
 			List<MessageAndOffset> messages = simpleConsumerManager.fetch(currentOffset);
 			
-			if(null == messages || messages.size() == 0) {
+			if(null == messages){
+				new IOException("message fetch fail.");
+			}
+			if(messages.size() == 0) {
 				break;
 			}
 			
@@ -109,13 +109,11 @@ public class KafkaScanner implements Scanner {
 	
 	@Override
 	public Schema getSchema() {
-		LOG.info(">>>>>>getSchema");
 		return this.schema;
 	}
 
 	@Override
 	public void init() throws IOException {
-		LOG.info(">>>>>>init");	
 		messageIndex = 0;
 		messages = new ArrayList<MessageAndOffset>();
 		inited = true;
@@ -134,7 +132,6 @@ public class KafkaScanner implements Scanner {
 
 	@Override
 	public Tuple next() throws IOException {
-		LOG.info(">>>>>>next");
 	    if (finished.get()) {
 	        return null;
 	      }
@@ -147,15 +144,11 @@ public class KafkaScanner implements Scanner {
 	        return null;
 	    }
 	    VTuple tuple;
-        // this loop will continue until one tuple is build or EOS (end of stream).
 	    MessageAndOffset message = messages.get(messageIndex);
 	    ByteBuf buf = Unpooled.wrappedBuffer(message.message().payload());
-        // if no more line, then return EOT (end of tuple)
         if (buf == null) {
            return null;
         }
-        // If there is no required column, we just read each line
-        // and then return an empty tuple without parsing line.
         if (targets.length == 0) {
           messageIndex++;
           return EmptyTuple.get();
@@ -175,7 +168,6 @@ public class KafkaScanner implements Scanner {
 
 	@Override
 	public void reset() throws IOException {
-		LOG.info(">>>>>>reset");
 		progress = 0.0f;
 		messageIndex = 0;
 		finished.set(false);
@@ -183,10 +175,8 @@ public class KafkaScanner implements Scanner {
 
 	@Override
 	public void close() throws IOException {
-		LOG.info(">>>>>>close");
 	    progress = 1.0f;
 		finished.set(true);
-//		messages.clear();
 		messages = null;
         if (tableStats != null) {
        	 tableStats.setNumRows(messageIndex);
@@ -195,13 +185,11 @@ public class KafkaScanner implements Scanner {
 
 	@Override
 	public boolean isProjectable() {
-		LOG.info(">>>>>>isProjectable");
 		return true;
 	}
 
 	@Override
 	public void setTarget(Column[] targets) {
-		LOG.info(">>>>>>setTarget");
 	    if (inited) {
 	        throw new IllegalStateException("Should be called before init()");
 	    }
@@ -210,31 +198,25 @@ public class KafkaScanner implements Scanner {
 
 	@Override
 	public boolean isSelectable() {
-		LOG.info(">>>>>>isSelectable");
 		return false;
 	}
 
 	@Override
 	public void setSearchCondition(Object expr) {
-		LOG.info(">>>>>>setSearchCondition");
-		
 	}
 
 	@Override
 	public boolean isSplittable() {
-		LOG.info(">>>>>>isSplittable");
 		return false;
 	}
 
 	@Override
 	public float getProgress() {
-		LOG.info(">>>>>>getProgress");
 		return this.progress;
 	}
 
 	@Override
 	public TableStats getInputStats() {
-		LOG.info(">>>>>>getInputStats");
         if (tableStats != null) {
         	 tableStats.setNumRows(messageIndex);
         }

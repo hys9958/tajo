@@ -28,43 +28,31 @@ public class KafkaAppender implements Appender {
 
 	@Override
 	public void init() throws IOException {
-		// TODO Auto-generated method stub
-		
 	}
 
 	@Override
 	public void addTuple(Tuple t) throws IOException {
-		// TODO Auto-generated method stub
-		
 	}
 
 	@Override
 	public void flush() throws IOException {
-		// TODO Auto-generated method stub
-		
 	}
 
 	@Override
 	public long getEstimatedOutputSize() throws IOException {
-		// TODO Auto-generated method stub
 		return 0;
 	}
 
 	@Override
 	public void close() throws IOException {
-		// TODO Auto-generated method stub
-		
 	}
 
 	@Override
 	public void enableStats() {
-		// TODO Auto-generated method stub
-		
 	}
 
 	@Override
 	public TableStats getStats() {
-		// TODO Auto-generated method stub
 		return null;
 	}
 

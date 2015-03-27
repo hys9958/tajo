@@ -30,25 +30,19 @@ public class KafkaTextSerializer extends TextLineSerializer{
 
 	public KafkaTextSerializer(Schema schema, TableMeta meta) {
 		super(schema, meta);
-		// TODO Auto-generated constructor stub
 	}
 
 	@Override
 	public void init() {
-		// TODO Auto-generated method stub
-		
 	}
 
 	@Override
 	public int serialize(OutputStream out, Tuple input) throws IOException {
-		// TODO Auto-generated method stub
 		return 0;
 	}
 
 	@Override
 	public void release() {
-		// TODO Auto-generated method stub
-		
 	}
 
 }

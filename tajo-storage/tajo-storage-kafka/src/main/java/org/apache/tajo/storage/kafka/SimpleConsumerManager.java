@@ -18,6 +18,7 @@
 
 package org.apache.tajo.storage.kafka;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -31,6 +32,8 @@ import java.util.Set;
 import kafka.api.FetchRequest;
 import kafka.api.FetchRequestBuilder;
 import kafka.api.PartitionOffsetRequestInfo;
+import kafka.cluster.Broker;
+import kafka.common.ErrorMapping;
 import kafka.common.TopicAndPartition;
 import kafka.javaapi.FetchResponse;
 import kafka.javaapi.OffsetResponse;
@@ -41,51 +44,46 @@ import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.message.MessageAndOffset;
 
 import org.apache.commons.collections.IteratorUtils;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.tajo.util.NetUtils;
 
 
 public class SimpleConsumerManager {
+	private static final Log LOG = LogFactory.getLog(SimpleConsumerManager.class);
 	//TODO: configurable setting.
     static final int CONSUMER_TIMEOUT = 30000;
     static final int CONSUMER_BUFFER_SIZE = 64 * 1024;
     static final int CONSUMER_FETCH_SIZE = 300 * 1024;
+    static final int FETCH_TRY_NUM = 3;
     
     private SimpleConsumer consumer = null;
-	private List<String> replicaBrokers = new ArrayList<String>();
-	private List<InetSocketAddress> seedBrokers = new ArrayList<InetSocketAddress>();
+	private List<InetSocketAddress> brokers = new ArrayList<InetSocketAddress>();
     private String topic;
     private int partition;
     private String clientId;
-    private String leadBroker;
-    private int leadBrokerPort;
+    private Broker leader;
 	
-	public SimpleConsumerManager(String seedBrokers, String topic, int partition) {
-		this.replicaBrokers = new ArrayList<String>();
+	public SimpleConsumerManager(String seedBrokers, String topic, int partition) throws IOException {
 		this.topic = topic;
 		this.partition = partition;
 		//Identifier of simpleConsumer.
 		this.clientId = SimpleConsumerManager.getIdentifier();
-		this.seedBrokers = SimpleConsumerManager.getBrokerList(seedBrokers);
-        PartitionMetadata metadata = findLeader(topic, partition);
-        if (metadata == null) {
-            System.out.println("Can't find metadata for Topic and Partition. Exiting");
-            return;
-        }
-        if (metadata.leader() == null) {
-            System.out.println("Can't find Leader for Topic and Partition. Exiting");
-            return;
-        }
-        this.leadBroker = metadata.leader().host();
-        this.leadBrokerPort = metadata.leader().port();
-        
-        consumer = new SimpleConsumer(leadBroker, leadBrokerPort, CONSUMER_TIMEOUT, CONSUMER_BUFFER_SIZE, clientId);
+		this.brokers = SimpleConsumerManager.getBrokerList(seedBrokers);
+		this.leader = findLeader(topic, partition);
+		//consumer creation fail.
+		if(null == leader){
+			throw new IOException("consumer creation fail");
+		}else{
+			consumer = new SimpleConsumer(leader.host(), leader.port(), CONSUMER_TIMEOUT, CONSUMER_BUFFER_SIZE, clientId);
+		}
 	}
 	
-	static public SimpleConsumerManager getSimpleConsumerManager(String seedBrokers, String topic, int partition){
-		return new SimpleConsumerManager(seedBrokers, topic, partition);
+	static public SimpleConsumerManager getSimpleConsumerManager(String seedBrokers, String topic, int partition) throws IOException {
+			return new SimpleConsumerManager(seedBrokers, topic, partition);
 	}
 	
-    static public Set<Integer> getPartitions(String seedBrokers, String topic) {
+    static public Set<Integer> getPartitions(String seedBrokers, String topic) throws IOException {
     	Set<Integer> partitions = new HashSet<Integer>();
         for (InetSocketAddress seed : SimpleConsumerManager.getBrokerList(seedBrokers)) {
             SimpleConsumer consumer = null;
@@ -95,7 +93,6 @@ public class SimpleConsumerManager {
                 topics.add(topic);
                 TopicMetadataRequest req = new TopicMetadataRequest(topics);
                 kafka.javaapi.TopicMetadataResponse resp = consumer.send(req);
-
                 //call to topicsMetadata() asks the Broker you are connected to for all the details about the topic we are interested in
                 List<TopicMetadata> metaData = resp.topicsMetadata();
                 //loop on partitionsMetadata iterates through all the partitions until we find the one we want.
@@ -105,8 +102,8 @@ public class SimpleConsumerManager {
                     }
                 }
             } catch (Exception e) {
-                System.out.println("Error communicating with Broker [" + seed + "] to find Leader for [" + topic
-                        + "] Reason: " + e);
+            	LOG.error(e.getMessage(), e);
+            	throw new IOException(e);
             } finally {
                 if (consumer != null) consumer.close();
             }
@@ -127,7 +124,7 @@ public class SimpleConsumerManager {
 		return r.nextLong()+"_"+System.currentTimeMillis();
 	}
 	
-    public void close(){
+	synchronized public void close(){
     	if(null != consumer){
     		consumer.close();
     	}
@@ -142,14 +139,40 @@ public class SimpleConsumerManager {
         .addFetch(topic, partition, offset, CONSUMER_FETCH_SIZE)
         .build();
         if(null != consumer){
-            FetchResponse fetchResponse = consumer.fetch(req); 
-            Iterator<MessageAndOffset> messages = fetchResponse.messageSet(topic, partition).iterator();
-            returnData = IteratorUtils.toList(messages);
+        	FetchResponse fetchResponse = null;
+        	for(int i=0; i<FETCH_TRY_NUM; i++){
+                fetchResponse = consumer.fetch(req);
+                if (fetchResponse.hasError()) {
+                    short code = fetchResponse.errorCode(topic, partition);
+                    LOG.error("Error fetching data from the Broker:" + leader + " Reason: " + code + " Try: "+ i);
+                    if(ErrorMapping.LeaderNotAvailableCode() == code ||
+                    		ErrorMapping.NotLeaderForPartitionCode() == code ||
+                    		ErrorMapping.RequestTimedOutCode() == code ||
+                    		ErrorMapping.BrokerNotAvailableCode() == code ||
+                    		ErrorMapping.ReplicaNotAvailableCode() == code){
+                    	Broker newLeader = findNewLeader();
+                    	if(null != newLeader){
+                    		synchronized(consumer){
+                    			this.leader = newLeader;
+                    			consumer.close();
+                    			consumer = new SimpleConsumer(leader.host(), leader.port(), CONSUMER_TIMEOUT, CONSUMER_BUFFER_SIZE, clientId);
+                    		}
+                    	}
+                    }
+                }else{
+                	break;
+                }
+                fetchResponse = null;
+        	}
+        	if(null != fetchResponse){
+                Iterator<MessageAndOffset> messages = fetchResponse.messageSet(topic, partition).iterator();
+                returnData = IteratorUtils.toList(messages);
+        	}
         }
         return returnData;
     }
     
-	public long getReadOffset(long whichTime) {
+	public long getReadOffset(long whichTime) throws IOException {
         TopicAndPartition topicAndPartition = new TopicAndPartition(topic, partition);
         Map<TopicAndPartition, PartitionOffsetRequestInfo> requestInfo = new HashMap<TopicAndPartition, PartitionOffsetRequestInfo>();
         requestInfo.put(topicAndPartition, new PartitionOffsetRequestInfo(whichTime, 1));
@@ -158,46 +181,44 @@ public class SimpleConsumerManager {
         OffsetResponse response = consumer.getOffsetsBefore(request);
 
         if (response.hasError()) {
-            System.out.println("Error fetching data Offset Data the Broker. Reason: " + response.errorCode(topic, partition) );
-            return 0;
+            LOG.error("Error fetching data Offset Data the Broker. Reason: " + response.errorCode(topic, partition) );
+            throw new IOException("Error fetching data Offset Data the Broker");
         }
         long[] offsets = response.offsets(topic, partition);
         return offsets[0];
     }
 	
-//    private String findNewLeader(String oldLeader, String topic, int partition, int port) throws Exception {
-//        for (int i = 0; i < 3; i++) {
-//            boolean goToSleep = false;
-//            PartitionMetadata metadata = findLeader(replicaBrokers, port, topic, partition);
-//            if (metadata == null) {
-//                goToSleep = true;
-//            } else if (metadata.leader() == null) {
-//                goToSleep = true;
-//            } else if (oldLeader.equalsIgnoreCase(metadata.leader().host()) && i == 0) {
-//                // first time through if the leader hasn't changed give ZooKeeper a second to recover
-//                // second time, assume the broker did recover before failover, or it was a non-Broker issue
-//                //
-//                goToSleep = true;
-//            } else {
-//                return metadata.leader().host();
-//            }
-//            if (goToSleep) {
-//                try {
-//                    Thread.sleep(1000);
-//                } catch (InterruptedException ie) {
-//                }
-//            }
-//        }
-//        System.out.println("Unable to find new leader after Broker failure. Exiting");
-//        throw new Exception("Unable to find new leader after Broker failure. Exiting");
-//    }
+	synchronized private Broker findNewLeader() {
+    	//retry for 3 time.
+        for (int i = 0; i < 3; i++) {
+            boolean goToSleep = false;
+            Broker newLeader = findLeader(topic, partition);
+            if (leader == null) {
+                goToSleep = true;
+            } else if (leader.host().equalsIgnoreCase(newLeader.host()) && leader.port() == newLeader.port() && i == 0) {
+                // first time through if the leader hasn't changed give ZooKeeper a second to recover
+                // second time, assume the broker did recover before failover, or it was a non-Broker issue
+                goToSleep = true;
+            } else {
+                return newLeader;
+            }
+            if (goToSleep) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException ie) {
+                }
+            }
+        }
+        //Unable to find new leader after Broker failure.
+        return null;
+    }
     
-    private PartitionMetadata findLeader(String topic, int partition) {
+    synchronized private Broker findLeader(String topic, int partition) {
         PartitionMetadata returnMetaData = null;
-        for (InetSocketAddress seed : seedBrokers) {
+        for (InetSocketAddress broker : brokers) {
             SimpleConsumer consumer = null;
             try {
-                consumer = new SimpleConsumer(seed.getHostName(), seed.getPort(), CONSUMER_TIMEOUT, CONSUMER_BUFFER_SIZE, clientId+"_leaderLookup");
+                consumer = new SimpleConsumer(broker.getHostName(), broker.getPort(), CONSUMER_TIMEOUT, CONSUMER_BUFFER_SIZE, clientId+"_leaderLookup");
                 List<String> topics = new ArrayList<String>();
                 topics.add(topic);
                 TopicMetadataRequest req = new TopicMetadataRequest(topics);
@@ -214,20 +235,25 @@ public class SimpleConsumerManager {
                     }
                 }
             } catch (Exception e) {
-                System.out.println("Error communicating with Broker [" + seed + "] to find Leader for [" + topic
+                LOG.error("Error communicating with Broker [" + broker + "] to find Leader for [" + topic
                         + ", " + partition + "] Reason: " + e);
             } finally {
                 if (consumer != null) consumer.close();
             }
         }
-        // add replica broker info to m_replicaBrokers
-        if (returnMetaData != null) {
-            replicaBrokers.clear();
-            for (kafka.cluster.Broker replica : returnMetaData.replicas()) {
-                replicaBrokers.add(replica.host());
+        //Can't find metadata for Topic and Partition.
+        if (returnMetaData == null) {
+        	return null;
+        }else{
+            // add replica broker info to replicaBrokers
+            if (returnMetaData != null) {
+            	brokers.clear();
+                for (kafka.cluster.Broker replica : returnMetaData.replicas()) {
+                	brokers.add(NetUtils.createSocketAddr(replica.host(), replica.port()));
+                }
             }
         }
-        return returnMetaData;
+        return returnMetaData.leader();
     }
 
 }
