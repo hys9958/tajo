@@ -90,7 +90,7 @@ limitations under the License.
           </execution>
         </executions>
       </plugin>
-      <plugin>
+	  <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-antrun-plugin</artifactId>
         <executions>
@@ -157,8 +157,7 @@ limitations under the License.
       </plugin>
     </plugins>
   </build>
-
-
+  
   <dependencies>
     <dependency>
       <groupId>org.apache.tajo</groupId>
@@ -190,6 +189,29 @@ limitations under the License.
 	  <artifactId>kafka_2.10</artifactId>
 	  <version>0.8.2.0</version>
 	  <scope>provided</scope>
+	</dependency>
+	<dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <scope>test</scope>
+    </dependency>
+	<dependency>
+		<groupId>org.apache.zookeeper</groupId>
+		<artifactId>zookeeper</artifactId>
+		<version>3.4.6</version>
+		<scope>test</scope>
+	</dependency>
+	<dependency>
+		<groupId>io.airlift</groupId>
+		<artifactId>testing</artifactId>
+		<version>0.88</version>
+		<scope>test</scope>
+	</dependency>
+	<dependency>
+		<groupId>com.101tec</groupId>
+		<artifactId>zkclient</artifactId>
+		<scope>test</scope>
+		<version>0.4</version>
 	</dependency>
   </dependencies>
 

@@ -27,18 +27,18 @@ import org.apache.tajo.storage.text.TextLineSerDe;
 import org.apache.tajo.storage.text.TextLineSerializer;
 
 public class KafkaTextSerDe extends TextLineSerDe {
-	  @Override
-	  public TextLineDeserializer createDeserializer(Schema schema, TableMeta meta, int[] targetColumnIndexes) {
-	    return new KafkaTextDeserializer(schema, meta, targetColumnIndexes);
-	  }
+  @Override
+  public TextLineDeserializer createDeserializer(Schema schema, TableMeta meta, int[] targetColumnIndexes) {
+    return new KafkaTextDeserializer(schema, meta, targetColumnIndexes);
+  }
 
-	  @Override
-	  public TextLineSerializer createSerializer(Schema schema, TableMeta meta) {
-	    return new KafkaTextSerializer(schema, meta);
-	  }
+  @Override
+  public TextLineSerializer createSerializer(Schema schema, TableMeta meta) {
+    return new KafkaTextSerializer(schema, meta);
+  }
 
-	  public static char getFieldDelimiter(TableMeta meta) {
-	    return StringEscapeUtils.unescapeJava(meta.getOption(StorageConstants.TEXT_DELIMITER,
-	        StorageConstants.DEFAULT_FIELD_DELIMITER)).charAt(0);
-	  }
+  public static char getFieldDelimiter(TableMeta meta) {
+    return StringEscapeUtils.unescapeJava(
+        meta.getOption(StorageConstants.TEXT_DELIMITER, StorageConstants.DEFAULT_FIELD_DELIMITER)).charAt(0);
+  }
 }

@@ -46,156 +46,144 @@ import org.apache.tajo.util.ReflectionUtil;
 import com.google.protobuf.Message;
 
 public class KafkaSerializerDeserializer extends TextFieldSerializerDeserializer {
-	/** it caches serde classes. */
-	private static final Map<String, Class<? extends TextLineSerDe>> serdeClassCache = new ConcurrentHashMap<String, Class<? extends TextLineSerDe>>();
-	private static ProtobufJsonFormat protobufJsonFormat = ProtobufJsonFormat.getInstance();
-	private final boolean hasTimezone;
-	private final TimeZone timezone;
-	
-	public KafkaSerializerDeserializer(TableMeta meta) {
-		super(meta);
-	    hasTimezone = meta.containsOption(StorageConstants.TIMEZONE);
-	    timezone = TimeZone.getTimeZone(meta.getOption(StorageConstants.TIMEZONE, TajoConstants.DEFAULT_SYSTEM_TIMEZONE));
-	}
+  /** it caches serde classes. */
+  private static final Map<String, Class<? extends TextLineSerDe>> serdeClassCache = new ConcurrentHashMap<String, Class<? extends TextLineSerDe>>();
+  private static ProtobufJsonFormat protobufJsonFormat = ProtobufJsonFormat.getInstance();
+  private final boolean hasTimezone;
+  private final TimeZone timezone;
 
-	@SuppressWarnings("unchecked")
-	public static TextLineSerDe getTextSerde(TableMeta meta) {
-		TextLineSerDe lineSerder;
+  public KafkaSerializerDeserializer(TableMeta meta) {
+    super(meta);
+    hasTimezone = meta.containsOption(StorageConstants.TIMEZONE);
+    timezone = TimeZone.getTimeZone(meta.getOption(StorageConstants.TIMEZONE, TajoConstants.DEFAULT_SYSTEM_TIMEZONE));
+  }
 
-		String serDeClassName;
+  @SuppressWarnings("unchecked")
+  public static TextLineSerDe getTextSerde(TableMeta meta) {
+    TextLineSerDe lineSerder;
 
-		// if there is no given serde class, it will use Kafka message serder.
-		serDeClassName = meta.getOption(
-				KafkaStorageConstants.KAFKA_SERDE_CLASS,
-				KafkaStorageConstants.DEFAULT_KAFKA_SERDE_CLASS);
+    String serDeClassName;
 
-		try {
-			Class<? extends TextLineSerDe> serdeClass;
+    // if there is no given serde class, it will use Kafka message serder.
+    serDeClassName = meta.getOption(KafkaStorageConstants.KAFKA_SERDE_CLASS,
+        KafkaStorageConstants.DEFAULT_KAFKA_SERDE_CLASS);
 
-			if (serdeClassCache.containsKey(serDeClassName)) {
-				serdeClass = serdeClassCache.get(serDeClassName);
-			} else {
-				serdeClass = (Class<? extends TextLineSerDe>) Class
-						.forName(serDeClassName);
-				serdeClassCache.put(serDeClassName, serdeClass);
-			}
-			lineSerder = (TextLineSerDe) ReflectionUtil.newInstance(serdeClass);
-		} catch (Throwable e) {
-			throw new RuntimeException(
-					"TextLineSerde class cannot be initialized.", e);
-		}
+    try {
+      Class<? extends TextLineSerDe> serdeClass;
 
-		return lineSerder;
-	}
+      if (serdeClassCache.containsKey(serDeClassName)) {
+        serdeClass = serdeClassCache.get(serDeClassName);
+      } else {
+        serdeClass = (Class<? extends TextLineSerDe>) Class.forName(serDeClassName);
+        serdeClassCache.put(serDeClassName, serdeClass);
+      }
+      lineSerder = (TextLineSerDe) ReflectionUtil.newInstance(serdeClass);
+    } catch (Throwable e) {
+      throw new RuntimeException("TextLineSerde class cannot be initialized.", e);
+    }
 
-	private static boolean isNull(ByteBuf val, ByteBuf nullBytes) {
-		return !val.isReadable() || nullBytes.equals(val);
-	}
+    return lineSerder;
+  }
 
-	private static boolean isNullText(ByteBuf val, ByteBuf nullBytes) {
-		return val.readableBytes() > 0 && nullBytes.equals(val);
-	}
+  private static boolean isNull(ByteBuf val, ByteBuf nullBytes) {
+    return !val.isReadable() || nullBytes.equals(val);
+  }
 
-	@Override
-	public Datum deserialize(ByteBuf buffer, Column col, int columnIndex,
-			ByteBuf nullChars) throws IOException {
-		Datum datum;
-		TajoDataTypes.Type type = col.getDataType().getType();
-		boolean nullField;
-		if (type == TajoDataTypes.Type.TEXT || type == TajoDataTypes.Type.CHAR) {
-			nullField = isNullText(buffer, nullChars);
-		} else {
-			nullField = isNull(buffer, nullChars);
-		}
+  private static boolean isNullText(ByteBuf val, ByteBuf nullBytes) {
+    return val.readableBytes() > 0 && nullBytes.equals(val);
+  }
 
-		if (nullField) {
-			datum = NullDatum.get();
-		} else {
-			byte[] bytes = new byte[buffer.readableBytes()];
-			buffer.readBytes(bytes);
-			switch (type) {
-			case BOOLEAN:
-				byte bool = bytes[0];
-				datum = DatumFactory.createBool(bool == 't' || bool == 'T');
-				break;
-			case BIT:
-				datum = DatumFactory.createBit(Byte.parseByte(new String(bytes,TextDatum.DEFAULT_CHARSET)));
-				break;
-			case CHAR:
-				datum = DatumFactory.createChar(Byte.parseByte(new String(bytes,TextDatum.DEFAULT_CHARSET)));
-				break;
-			case INT1:
-			case INT2:
-				datum = DatumFactory.createInt2((short) NumberUtil
-						.parseInt(bytes, 0, bytes.length));
-				break;
-			case INT4:
-				datum = DatumFactory.createInt4(NumberUtil.parseInt(bytes, 0, bytes.length));
-				break;
-			case INT8:
-				datum = DatumFactory.createInt8(NumberUtil.parseLong(bytes, 0, bytes.length));
-				break;
-			case FLOAT4:
-				datum = DatumFactory.createFloat4(new String(bytes, TextDatum.DEFAULT_CHARSET));
-				break;
-			case FLOAT8:
-				datum = DatumFactory.createFloat8(NumberUtil.parseDouble(bytes, 0, bytes.length));
-				break;
-			case TEXT: {
-				datum = DatumFactory.createText(bytes);
-				break;
-			}
-			case DATE:
-				datum = DatumFactory.createDate(new String(bytes, TextDatum.DEFAULT_CHARSET));
-				break;
-			case TIME:
-				if (hasTimezone) {
-					datum = DatumFactory.createTime(
-							new String(bytes, TextDatum.DEFAULT_CHARSET),
-							timezone);
-				} else {
-					datum = DatumFactory.createTime(new String(bytes, TextDatum.DEFAULT_CHARSET));
-				}
-				break;
-			case TIMESTAMP:
-				if (hasTimezone) {
-					datum = DatumFactory.createTimestamp(
-							new String(bytes, TextDatum.DEFAULT_CHARSET),
-							timezone);
-				} else {
-					datum = DatumFactory.createTimestamp(
-							new String(bytes, TextDatum.DEFAULT_CHARSET));
-				}
-				break;
-			case INTERVAL:
-				datum = DatumFactory.createInterval(
-						new String(bytes, TextDatum.DEFAULT_CHARSET));
-				break;
-			case PROTOBUF: {
-				ProtobufDatumFactory factory = ProtobufDatumFactory.get(col
-						.getDataType());
-				Message.Builder builder = factory.newBuilder();
-				try {
-					protobufJsonFormat.merge(bytes, builder);
-					datum = factory.createDatum(builder.build());
-				} catch (IOException e) {
-					e.printStackTrace();
-					throw new RuntimeException(e);
-				}
-				break;
-			}
-			case INET4:
-				datum = DatumFactory.createInet4(new String(bytes, TextDatum.DEFAULT_CHARSET));
-				break;
-			case BLOB: {
-				datum = DatumFactory.createBlob(Base64.decodeBase64(bytes));
-				break;
-			}
-			default:
-				datum = NullDatum.get();
-				break;
-			}
-		}
-		return datum;
-	}
+  @Override
+  public Datum deserialize(ByteBuf buffer, Column col, int columnIndex, ByteBuf nullChars) throws IOException {
+    Datum datum;
+    TajoDataTypes.Type type = col.getDataType().getType();
+    boolean nullField;
+    if (type == TajoDataTypes.Type.TEXT || type == TajoDataTypes.Type.CHAR) {
+      nullField = isNullText(buffer, nullChars);
+    } else {
+      nullField = isNull(buffer, nullChars);
+    }
+
+    if (nullField) {
+      datum = NullDatum.get();
+    } else {
+      byte[] bytes = new byte[buffer.readableBytes()];
+      buffer.readBytes(bytes);
+      switch (type) {
+      case BOOLEAN:
+        byte bool = bytes[0];
+        datum = DatumFactory.createBool(bool == 't' || bool == 'T');
+        break;
+      case BIT:
+        datum = DatumFactory.createBit(Byte.parseByte(new String(bytes, TextDatum.DEFAULT_CHARSET)));
+        break;
+      case CHAR:
+        datum = DatumFactory.createChar(Byte.parseByte(new String(bytes, TextDatum.DEFAULT_CHARSET)));
+        break;
+      case INT1:
+      case INT2:
+        datum = DatumFactory.createInt2((short) NumberUtil.parseInt(bytes, 0, bytes.length));
+        break;
+      case INT4:
+        datum = DatumFactory.createInt4(NumberUtil.parseInt(bytes, 0, bytes.length));
+        break;
+      case INT8:
+        datum = DatumFactory.createInt8(NumberUtil.parseLong(bytes, 0, bytes.length));
+        break;
+      case FLOAT4:
+        datum = DatumFactory.createFloat4(new String(bytes, TextDatum.DEFAULT_CHARSET));
+        break;
+      case FLOAT8:
+        datum = DatumFactory.createFloat8(NumberUtil.parseDouble(bytes, 0, bytes.length));
+        break;
+      case TEXT: {
+        datum = DatumFactory.createText(bytes);
+        break;
+      }
+      case DATE:
+        datum = DatumFactory.createDate(new String(bytes, TextDatum.DEFAULT_CHARSET));
+        break;
+      case TIME:
+        if (hasTimezone) {
+          datum = DatumFactory.createTime(new String(bytes, TextDatum.DEFAULT_CHARSET), timezone);
+        } else {
+          datum = DatumFactory.createTime(new String(bytes, TextDatum.DEFAULT_CHARSET));
+        }
+        break;
+      case TIMESTAMP:
+        if (hasTimezone) {
+          datum = DatumFactory.createTimestamp(new String(bytes, TextDatum.DEFAULT_CHARSET), timezone);
+        } else {
+          datum = DatumFactory.createTimestamp(new String(bytes, TextDatum.DEFAULT_CHARSET));
+        }
+        break;
+      case INTERVAL:
+        datum = DatumFactory.createInterval(new String(bytes, TextDatum.DEFAULT_CHARSET));
+        break;
+      case PROTOBUF: {
+        ProtobufDatumFactory factory = ProtobufDatumFactory.get(col.getDataType());
+        Message.Builder builder = factory.newBuilder();
+        try {
+          protobufJsonFormat.merge(bytes, builder);
+          datum = factory.createDatum(builder.build());
+        } catch (IOException e) {
+          e.printStackTrace();
+          throw new RuntimeException(e);
+        }
+        break;
+      }
+      case INET4:
+        datum = DatumFactory.createInet4(new String(bytes, TextDatum.DEFAULT_CHARSET));
+        break;
+      case BLOB: {
+        datum = DatumFactory.createBlob(Base64.decodeBase64(bytes));
+        break;
+      }
+      default:
+        datum = NullDatum.get();
+        break;
+      }
+    }
+    return datum;
+  }
 }

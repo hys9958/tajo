@@ -16,33 +16,10 @@
  * limitations under the License.
  */
 
-package org.apache.tajo.storage.kafka.serDe;
+package org.apache.tajo.storage.kafka;
 
-import java.io.IOException;
-import java.io.OutputStream;
-
-import org.apache.tajo.catalog.Schema;
-import org.apache.tajo.catalog.TableMeta;
-import org.apache.tajo.storage.Tuple;
-import org.apache.tajo.storage.text.TextLineSerializer;
-
-public class KafkaTextSerializer extends TextLineSerializer {
-
-  public KafkaTextSerializer(Schema schema, TableMeta meta) {
-    super(schema, meta);
-  }
-
-  @Override
-  public void init() {
-  }
-
-  @Override
-  public int serialize(OutputStream out, Tuple input) throws IOException {
-    return 0;
-  }
-
-  @Override
-  public void release() {
-  }
-
+public class TestConstants {
+  final static int kafka_partition_num = 3;
+  final static String test_topic = "test-topic";
+  final static String[] test_data = { "1|abc|0.2", "2|def|0.4", "3|ghi|0.6", "4|jkl|0.8", "5|mno|1.0" };
 }

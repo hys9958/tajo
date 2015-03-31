@@ -27,8 +27,8 @@ import "CatalogProtos.proto";
 message KafkaFragmentProto {
   required string topicName = 1;
   required string brokers = 2;
-  required int64 startOffset = 4;
-  required int64 lastOffset = 5;
-  required int32 partitionId = 6;
-  required int64 length = 7;
+  required int64 startOffset = 3;
+  required int64 lastOffset = 4;
+  required int32 partitionId = 5;
+  required int64 length = 6;
 }

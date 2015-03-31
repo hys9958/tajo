@@ -33,76 +33,69 @@ import org.apache.tajo.storage.text.TextLineParsingError;
 import org.apache.tajo.storage.text.TextLineSerDe;
 
 public class KafkaTextDeserializer extends TextLineDeserializer {
-	private FieldSplitProcessor processor;
-	private FieldSerializerDeserializer fieldSerDer;
-	private ByteBuf nullChars;
+  private FieldSplitProcessor processor;
+  private FieldSerializerDeserializer fieldSerDer;
+  private ByteBuf nullChars;
 
-	public KafkaTextDeserializer(Schema schema, TableMeta meta,
-			int[] targetColumnIndexes) {
-		super(schema, meta, targetColumnIndexes);
-	}
+  public KafkaTextDeserializer(Schema schema, TableMeta meta, int[] targetColumnIndexes) {
+    super(schema, meta, targetColumnIndexes);
+  }
 
-	@Override
-	public void init() {
-		this.processor = new FieldSplitProcessor(
-				KafkaTextSerDe.getFieldDelimiter(meta));
+  @Override
+  public void init() {
+    this.processor = new FieldSplitProcessor(KafkaTextSerDe.getFieldDelimiter(meta));
 
-		if (nullChars != null) {
-			nullChars.release();
-		}
-		nullChars = TextLineSerDe.getNullChars(meta);
+    if (nullChars != null) {
+      nullChars.release();
+    }
+    nullChars = TextLineSerDe.getNullChars(meta);
 
-		fieldSerDer = new KafkaSerializerDeserializer(meta);
-	}
+    fieldSerDer = new KafkaSerializerDeserializer(meta);
+  }
 
-	public void deserialize(final ByteBuf lineBuf, Tuple output)
-			throws IOException, TextLineParsingError {
-		int[] projection = targetColumnIndexes;
-		if (lineBuf == null || targetColumnIndexes == null
-				|| targetColumnIndexes.length == 0) {
-			return;
-		}
+  public void deserialize(final ByteBuf lineBuf, Tuple output) throws IOException, TextLineParsingError {
+    int[] projection = targetColumnIndexes;
+    if (lineBuf == null || targetColumnIndexes == null || targetColumnIndexes.length == 0) {
+      return;
+    }
 
-		final int rowLength = lineBuf.readableBytes();
-		int start = 0, fieldLength = 0, end = 0;
+    final int rowLength = lineBuf.readableBytes();
+    int start = 0, fieldLength = 0, end = 0;
 
-		// Projection
-		int currentTarget = 0;
-		int currentIndex = 0;
+    // Projection
+    int currentTarget = 0;
+    int currentIndex = 0;
 
-		while (end != -1) {
-			end = lineBuf.forEachByte(start, rowLength - start, processor);
+    while (end != -1) {
+      end = lineBuf.forEachByte(start, rowLength - start, processor);
 
-			if (end < 0) {
-				fieldLength = rowLength - start;
-			} else {
-				fieldLength = end - start;
-			}
+      if (end < 0) {
+        fieldLength = rowLength - start;
+      } else {
+        fieldLength = end - start;
+      }
 
-			if (projection.length > currentTarget
-					&& currentIndex == projection[currentTarget]) {
-				lineBuf.setIndex(start, start + fieldLength);
-				Datum datum = fieldSerDer
-						.deserialize(lineBuf, schema.getColumn(currentIndex),
-								currentIndex, nullChars);
-				output.put(currentIndex, datum);
-				currentTarget++;
-			}
+      if (projection.length > currentTarget && currentIndex == projection[currentTarget]) {
+        lineBuf.setIndex(start, start + fieldLength);
+        Datum datum = fieldSerDer.deserialize(lineBuf, schema.getColumn(currentIndex), currentIndex, nullChars);
+        output.put(currentIndex, datum);
+        currentTarget++;
+      }
 
-			if (projection.length == currentTarget) {
-				break;
-			}
+      if (projection.length == currentTarget) {
+        break;
+      }
 
-			start = end + 1;
-			currentIndex++;
-		}
-	}
+      start = end + 1;
+      currentIndex++;
+    }
+  }
 
-	@Override
-	public void release() {
-		if (nullChars != null) {
-			nullChars.release();
-			nullChars = null;
-		}
-	}
+  @Override
+  public void release() {
+    if (nullChars != null) {
+      nullChars.release();
+      nullChars = null;
+    }
+  }
 }
